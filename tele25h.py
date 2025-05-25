@@ -5,13 +5,12 @@ from datetime import datetime, timedelta
 from telegram import Update, ReplyKeyboardMarkup
 from telegram.ext import Application, CommandHandler, ContextTypes, MessageHandler, filters
 import re
-
-# === SERVER GIẢ CHO RENDER ===
 import threading
 import http.server
 import socketserver
 import os
 
+# === SERVER GIẢ CHO RENDER ===
 def dummy_server():
     port = int(os.environ.get("PORT", 10000))
     handler = http.server.SimpleHTTPRequestHandler
@@ -20,7 +19,7 @@ def dummy_server():
         httpd.serve_forever()
 
 # === CẤU HÌNH ===
-BOT_TOKEN = os.environ.get("7687184140:AAHA2OTsXjlKdIPuGJh2Ou1BD_9hlYPsGJU")
+BOT_TOKEN = "7687184140:AAHA2OTsXjlKdIPuGJh2Ou1BD_9hlYPsGJU"
 ADMIN_ID = 6254591457
 KEYS_FILE = "keys.json"
 user_keys = {}

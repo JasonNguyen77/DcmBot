@@ -8,6 +8,8 @@ import re
 import threading
 import os
 from flask import Flask
+import hashlib
+import math
 
 # === CẤU HÌNH ===
 BOT_TOKEN = "7687184140:AAHA2OTsXjlKdIPuGJh2Ou1BD_9hlYPsGJU"
@@ -25,6 +27,34 @@ def home():
 def run_web():
     port = int(os.environ.get("PORT", 10000))
     web_app.run(host='0.0.0.0', port=port)
+
+# === HÀM SOI CẦU MỚI ===
+def calculate_percentage(value: int, max_value: int) -> float:
+    normalized_value = value / max_value
+    probability = 1 / (1 + math.exp(-12 * (normalized_value - 0.5)))
+    return probability * 100
+
+def deterministic_salt(input_str: str) -> str:
+    return hashlib.md5(input_str.encode()).hexdigest()
+
+def enhanced_hash_analysis(input_str: str) -> float:
+    salt = deterministic_salt(input_str)
+    combined_input = input_str + salt
+
+    sha512_hash = hashlib.sha512(combined_input.encode()).hexdigest()
+    sha256_hash = hashlib.sha256(combined_input.encode()).hexdigest()
+    sha3_512_hash = hashlib.sha3_512(combined_input.encode()).hexdigest()
+    blake2b_hash = hashlib.blake2b(combined_input.encode()).hexdigest()
+    md5_hash = hashlib.md5(combined_input.encode()).hexdigest()
+
+    value1 = int(sha512_hash[:16], 16)
+    value2 = int(sha256_hash[-16:], 16)
+    value3 = int(sha3_512_hash[16:32], 16)
+    value4 = int(blake2b_hash[:16], 16)
+    value5 = int(md5_hash[:8], 16)
+
+    combined_value = ((value1 ^ value2) + (value3 >> 3) - (value4 << 2) + int(math.sqrt(value5))) % (1 << 64)
+    return calculate_percentage(combined_value, (1 << 64) - 1)
 
 # === KEY HANDLING ===
 def load_keys():
@@ -136,36 +166,24 @@ async def nhap_key(update: Update, context: ContextTypes.DEFAULT_TYPE):
     else:
         await update.message.reply_text("❌ Key không hợp lệ hoặc đã hết hạn.")
 
-# === XỬ LÝ MÃ MD5 TỰ ĐỘNG ===
+# === XỬ LÝ MÃ MD5 VỚI LOGIC MỚI ===
 async def handle_md5_direct(update: Update, context: ContextTypes.DEFAULT_TYPE, md5):
     user_id = update.effective_user.id
     if user_id not in user_keys:
         await update.message.reply_text("🔒 Bạn cần nhập key trước. Dùng: /nhapkey KEY")
         return
 
-    await update.message.reply_text("Bot đang chạy...")
-    import asyncio
-    await asyncio.sleep(3)
+    await update.message.reply_text("Đang phân tích...")
 
-    to_hops = [(0, 2, 31), (0, 6, 31), (0, 7, 31), (0, 8, 31),
-               (0, 12, 31), (0, 14, 31), (0, 18, 31), (0, 20, 31),
-               (0, 24, 31), (0, 26, 31)]
-    phieu_tai = 0
-    phieu_xiu = 0
-    for a, b, c in to_hops:
-        hex_str = md5[a] + md5[b] + md5[c]
-        dec_value = int(hex_str, 16)
-        if dec_value % 10 < 5:
-            phieu_xiu += 1
-        else:
-            phieu_tai += 1
+    percent_xiu = enhanced_hash_analysis(md5)
+    percent_tai = 100.0 - percent_xiu
 
-    if phieu_tai > phieu_xiu:
-        result = f"Xỉu ({phieu_tai * 10}%)"
-    elif phieu_xiu > phieu_tai:
-        result = f"Tài ({phieu_xiu * 10}%)"
+    if abs(percent_xiu - percent_tai) < 5:
+        result = "Bỏ tay này (xác suất quá cân bằng)"
+    elif percent_xiu > percent_tai:
+        result = f"Xỉu mạnh: {percent_xiu:.2f}%\nTài yếu: {percent_tai:.2f}%"
     else:
-        result = "Bỏ tay này (5/5 phiếu)"
+        result = f"Tài mạnh: {percent_tai:.2f}%\nXỉu yếu: {percent_xiu:.2f}%"
 
     key = user_keys[user_id]
     keys = load_keys()
@@ -173,7 +191,7 @@ async def handle_md5_direct(update: Update, context: ContextTypes.DEFAULT_TYPE, 
     minutes_left = int((expire_at - datetime.now()).total_seconds() // 60)
 
     await update.message.reply_text(
-        f"Kết quả: {result}\nThời gian còn lại: {minutes_left} phút"
+        f"Kết quả soi cầu:\n{result}\n\nThời gian còn lại: {minutes_left} phút"
     )
 
 # === XỬ LÝ TIN NHẮN ===
@@ -193,7 +211,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     else:
         await update.message.reply_text("❓ Không hiểu yêu cầu. Hãy dùng các lệnh có sẵn.")
 
-# === CHẠY BOT + FLASK ===
+# === KHỞI ĐỘNG BOT + WEB ===
 def main():
     app = Application.builder().token(BOT_TOKEN).build()
 
@@ -203,7 +221,6 @@ def main():
     app.add_handler(CommandHandler("nhapkey", nhap_key))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
 
-    # Chạy Flask song song để giữ Render online
     threading.Thread(target=run_web).start()
 
     print("Bot đang chạy...")

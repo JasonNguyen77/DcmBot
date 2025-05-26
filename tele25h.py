@@ -6,23 +6,25 @@ from telegram import Update, ReplyKeyboardMarkup
 from telegram.ext import Application, CommandHandler, ContextTypes, MessageHandler, filters
 import re
 import threading
-import http.server
-import socketserver
 import os
-
-# === SERVER GIẢ CHO RENDER ===
-def dummy_server():
-    port = int(os.environ.get("PORT", 10000))
-    handler = http.server.SimpleHTTPRequestHandler
-    with socketserver.TCPServer(("", port), handler) as httpd:
-        print(f"Serving dummy HTTP on port {port}")
-        httpd.serve_forever()
+from flask import Flask
 
 # === CẤU HÌNH ===
 BOT_TOKEN = "7687184140:AAHA2OTsXjlKdIPuGJh2Ou1BD_9hlYPsGJU"
 ADMIN_ID = 6254591457
 KEYS_FILE = "keys.json"
 user_keys = {}
+
+# === FLASK WEB SERVER GIỮ BOT LUÔN BẬT ===
+web_app = Flask(__name__)
+
+@web_app.route('/')
+def home():
+    return 'Bot is running!'
+
+def run_web():
+    port = int(os.environ.get("PORT", 10000))
+    web_app.run(host='0.0.0.0', port=port)
 
 # === KEY HANDLING ===
 def load_keys():
@@ -191,7 +193,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     else:
         await update.message.reply_text("❓ Không hiểu yêu cầu. Hãy dùng các lệnh có sẵn.")
 
-# === KHỞI TẠO ===
+# === CHẠY BOT + FLASK ===
 def main():
     app = Application.builder().token(BOT_TOKEN).build()
 
@@ -201,8 +203,8 @@ def main():
     app.add_handler(CommandHandler("nhapkey", nhap_key))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
 
-    # Mở server giả để Render không báo lỗi
-    threading.Thread(target=dummy_server, daemon=True).start()
+    # Chạy Flask song song để giữ Render online
+    threading.Thread(target=run_web).start()
 
     print("Bot đang chạy...")
     app.run_polling()
